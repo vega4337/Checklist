@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Trip Checklist — iPhone Edition</title>
+
+<!-- iOS / PWA meta -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#071023">
+<link rel="apple-touch-icon" href="" />
+
+<style>
+  :root{
+    --bg: #071023;
+    --card: #0b1220;
+    --accent: #06b6d4;
+    --muted: #9aa6b2;
+    --text: #e6eef3;
+    --done-bg: rgba(6,182,212,0.06);
+  }
+  html,body{height:100%;margin:0;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+  body{
+    background: linear-gradient(180deg,#071023 0%, #081727 100%);
+    color:var(--text);
+    display:flex;align-items:center;justify-content:center;padding:18px;
+    -webkit-font-smoothing:antialiased;-webkit-touch-callout:none;
+  }
+
+  .app {
+    width:100%;
+    max-width:820px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-radius:14px;
+    padding:18px;
+    box-shadow: 0 8px 36px rgba(2,6,23,0.65);
+    border:1px solid rgba(255,255,255,0.03);
+    min-height:80vh;
+    box-sizing:border-box;
+  }
+
+  header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  h1{font-size:20px;margin:0;font-weight:700;}
+  .sub{color:var(--muted);font-size:13px}
+
+  .controls{display:flex;gap:8px;align-items:center;}
+  button, .btn {
+    background:transparent;color:var(--text);border:1px solid rgba(255,255,255,0.04);
+    padding:8px 10px;border-radius:10px;cursor:pointer;font-size:14px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .primary{background:linear-gradient(90deg,var(--accent),#60e0f0);color:#042;border:none;padding:10px 12px;font-weight:700;border-radius:12px}
+  .primary:active{transform:translateY(1px)}
+
+  .add-row{display:flex;gap:8px;margin-bottom:10px;}
+  .add-row input{
+    flex:1;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.04);
+    background:rgba(255,255,255,0.01);color:var(--text);font-size:17px;
+    -webkit-appearance:none;
+  }
+
+  .list{
+    background: rgba(255,255,255,0.01);
+    border-radius:12px;padding:8px;min-height:220px;max-height:54vh;overflow:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  .item{
+    display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;margin-bottom:10px;
+    transition:background 120ms,transform 100ms; background:transparent;
+    touch-action: pan-y;
+    min-height:56px;
+  }
+  .item.dragging{opacity:0.9;transform:scale(1.02);box-shadow:0 12px 28px rgba(2,6,23,0.4)}
+  .item:last-child{margin-bottom:0}
+  .checkbox{
+    width:44px;height:44px;border-radius:10px;border:2px solid rgba(255,255,255,0.06);display:inline-flex;
+    align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-weight:700;font-size:18px;
+    background:transparent;
+  }
+  .checkbox.checked{
+    background:linear-gradient(90deg,var(--accent),#60e0f0);border:none;color:#013;
+  }
+  .label{
+    flex:1;word-break:break-word; font-size:17px;line-height:1.1;
+  }
+  .label.done{
+    text-decoration:line-through;color:var(--muted);opacity:0.95;
+  }
+  .drag-handle{
+    width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+    cursor:grab; user-select:none;font-size:20px;
+  }
+
+  .bottom-row{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:12px;flex-wrap:wrap}
+  .small{font-size:13px;color:var(--muted)}
+  .hidden{display:none}
+
+  /* print */
+  @media print{
+    body{background:white;color:black}
+    .app{box-shadow:none;border:none;background:white}
+    .controls, .add-row, .bottom-row{display:none}
+  }
+</style>
+</head>
+<body>
+  <main class="app" role="application" aria-label="Trip checklist app">
+    <header>
+      <div>
+        <h1>Trip Checklist</h1>
+        <div class="sub">Tap to mark packed — long-press drag to reorder (touch)</div>
+      </div>
+
+      <div class="controls" aria-hidden="false">
+        <button id="toggleHidePacked" title="Hide/show packed items">Hide</button>
+        <button id="exportBtn" title="Export list">Export</button>
+        <button id="importBtn" title="Import">Import</button>
+      </div>
+    </header>
+
+    <div class="add-row" aria-hidden="false">
+      <input id="newItem" type="text" inputmode="text" placeholder="Add item (press Add or Return) — e.g. Passport" />
+      <button id="addBtn" class="primary">Add</button>
+    </div>
+
+    <section id="list" class="list" aria-live="polite" aria-label="Checklist">
+      <!-- items rendered here -->
+    </section>
+
+    <div class="bottom-row">
+      <div class="small" id="stats"></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label style="color:var(--muted);font-size:13px;display:flex;gap:8px;align-items:center">
+          <input id="autoSort" type="checkbox"> Auto sort
+        </label>
+        <button id="printBtn" class="btn">Print</button>
+      </div>
+    </div>
+  </main>
+
+<script>
+(() => {
+  const STORAGE_KEY = 'trip-checklist-iphone-v1';
+  let items = []; // {id, text, done, createdAt}
+  let hidePacked = false;
+  let autoSort = false;
+
+  // DOM refs
+  const listEl = document.getElementById('list');
+  const newItemInput = document.getElementById('newItem');
+  const addBtn = document.getElementById('addBtn');
+  const statsEl = document.getElementById('stats');
+  const toggleHidePackedBtn = document.getElementById('toggleHidePacked');
+  const exportBtn = document.getElementById('exportBtn');
+  const importBtn = document.getElementById('importBtn');
+  const printBtn = document.getElementById('printBtn');
+  const autoSortCheckbox = document.getElementById('autoSort');
+
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  const save = () => localStorage.setItem(STORAGE_KEY, JSON.stringify({items, hidePacked, autoSort}));
+  const load = () => {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      items = Array.isArray(parsed.items) ? parsed.items : (parsed.items || []);
+      hidePacked = !!parsed.hidePacked;
+      autoSort = !!parsed.autoSort;
+      toggleHidePackedBtn.textContent = hidePacked ? 'Show' : 'Hide';
+      autoSortCheckbox.checked = autoSort;
+    } catch(e) {
+      console.warn('Could not parse saved list', e);
+    }
+  };
+
+  // Render
+  function render(){
+    listEl.innerHTML = '';
+    let visible = items.slice();
+    if(autoSort) visible.sort((a,b) => (a.done === b.done) ? (b.createdAt - a.createdAt) : (a.done ? 1 : -1));
+    let shownCount = 0;
+    visible.forEach(item => {
+      if(hidePacked && item.done) return;
+      shownCount++;
+      const itemEl = document.createElement('div');
+      itemEl.className = 'item';
+      itemEl.dataset.id = item.id;
+
+      const cb = document.createElement('button');
+      cb.className = 'checkbox' + (item.done ? ' checked' : '');
+      cb.title = item.done ? 'Unmark as packed' : 'Mark as packed';
+      cb.setAttribute('aria-pressed', String(!!item.done));
+      cb.innerHTML = item.done ? '✓' : '';
+      cb.addEventListener('click', (e) => { e.stopPropagation(); toggleDone(item.id); });
+
+      const label = document.createElement('div');
+      label.className = 'label' + (item.done ? ' done' : '');
+      label.textContent = item.text;
+      label.title = 'Tap to edit';
+      label.addEventListener('click', () => editItem(item.id));
+      label.tabIndex = 0;
+
+      const drag = document.createElement('div');
+      drag.className = 'drag-handle';
+      drag.innerHTML = '⋮⋮';
+      drag.title = 'Long-press and drag to reorder';
+
+      itemEl.appendChild(cb);
+      itemEl.appendChild(label);
+      itemEl.appendChild(drag);
+
+      // Touch-based reordering
+      let touchId = null;
+      let startY = 0;
+      let draggedClone = null;
+      let placeholder = null;
+      let originalIndex = null;
+
+      const onTouchStart = (ev) => {
+        // only start when touching the handle area (not entire item)
+        const t = ev.targetTouches ? ev.targetTouches[0] : ev;
+        touchId = t.identifier;
+        startY = t.clientY;
+        originalIndex = items.findIndex(i => i.id === item.id);
+
+        // create placeholder
+        placeholder = document.createElement('div');
+        placeholder.className = 'item placeholder';
+        placeholder.style.height = itemEl.offsetHeight + 'px';
+        placeholder.style.border = '2px dashed rgba(255,255,255,0.04)';
+        placeholder.style.marginBottom = '10px';
+        listEl.insertBefore(placeholder, itemEl.nextSibling);
+
+        // clone element to follow finger
+        draggedClone = itemEl.cloneNode(true);
+        draggedClone.style.position = 'fixed';
+        draggedClone.style.left = itemEl.getBoundingClientRect().left + 'px';
+        draggedClone.style.top = itemEl.getBoundingClientRect().top + 'px';
+        draggedClone.style.width = itemEl.getBoundingClientRect().width + 'px';
+        draggedClone.style.pointerEvents = 'none';
+        draggedClone.classList.add('dragging');
+        document.body.appendChild(draggedClone);
+
+        // hide original item for visual consistency
+        itemEl.style.visibility = 'hidden';
+      };
+
+      const onTouchMove = (ev) => {
+        if(touchId === null) return;
+        const t = [...ev.changedTouches].find(tt => tt.identifier === touchId);
+        if(!t) return;
+        ev.preventDefault(); // prevent scrolling while dragging
+        const y = t.clientY;
+        draggedClone.style.top = (y - draggedClone.offsetHeight/2) + 'px';
+
+        // determine which element is under the finger
+        const mid = document.elementFromPoint(window.innerWidth/2, y);
+        if(!mid) return;
+        // find nearest item element in DOM under mid
+        let candidate = mid.closest ? mid.closest('.item') : null;
+        if(candidate && candidate !== placeholder && candidate !== itemEl) {
+          // insert placeholder before/after candidate based on pointer
+          const rect = candidate.getBoundingClientRect();
+          const insertBefore = (y < rect.top + rect.height/2);
+          if(insertBefore) {
+            listEl.insertBefore(placeholder, candidate);
+          } else {
+            listEl.insertBefore(placeholder, candidate.nextSibling);
+          }
+        } else if(!candidate) {
+          // end, append placeholder
+          listEl.appendChild(placeholder);
+        }
+      };
+
+      const onTouchEnd = (ev) => {
+        if(touchId === null) return;
+        const t = [...ev.changedTouches].find(tt => tt.identifier === touchId) || ev;
+        // compute new index
+        const children = [...listEl.querySelectorAll('.item')].filter(el => el !== itemEl && el !== draggedClone);
+        // find index of placeholder among items
+        let newIndex = Array.from(listEl.children).indexOf(placeholder);
+        if(newIndex === -1) newIndex = children.length; // append
+        // remove placeholder and clone
+        if(placeholder && placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
+        if(draggedClone && draggedClone.parentNode) draggedClone.parentNode.removeChild(draggedClone);
+        itemEl.style.visibility = '';
+
+        // move data item to new index within the 'items' array
+        const fromIndex = items.findIndex(i => i.id === item.id);
+        if(fromIndex >= 0) {
+          const [moved] = items.splice(fromIndex, 1);
+          // compute insertion index among visible filtered list positions (approximate)
+          // simpler approach: insert at index equal to newIndex in DOM ordering among full items
+          // build array of ids in DOM order
+          const domIds = Array.from(listEl.querySelectorAll('.item')).map(el => el.dataset.id).filter(Boolean);
+          if(domIds.length === 0) {
+            items.push(moved);
+          } else {
+            // if item id still present in domIds, compute its position; otherwise append
+            const idx = domIds.indexOf(moved.id);
+            if(idx === -1) items.push(moved);
+            else items.splice(idx, 0, moved);
+          }
+          render();
+        } else {
+          render();
+        }
+
+        // cleanup
+        touchId = null;
+        draggedClone = null;
+        placeholder = null;
+      };
+
+      // Only start drag when touching the handle (long press)
+      let longPressTimer = null;
+      const handleTouchStartOnHandle = (e) => {
+        e.stopPropagation();
+        if(longPressTimer) clearTimeout(longPressTimer);
+        longPressTimer = setTimeout(() => {
+          onTouchStart(e.touches ? e : e);
+        }, 160); // short long-press threshold
+      };
+      const handleTouchMoveOnHandle = (e) => {
+        if(longPressTimer) {
+          // if the finger moves too much before long press, cancel
+          const t = e.touches[0];
+          if(Math.abs(t.clientY - startY) > 10) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        }
+        if(touchId !== null) onTouchMove(e);
+      };
+      const handleTouchEndOnHandle = (e) => {
+        if(longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+        if(touchId !== null) onTouchEnd(e);
+      };
+
+      // attach events
+      drag.addEventListener('touchstart', handleTouchStartOnHandle, {passive:false});
+      drag.addEventListener('touchmove', handleTouchMoveOnHandle, {passive:false});
+      drag.addEventListener('touchend', handleTouchEndOnHandle, {passive:false});
+      drag.addEventListener('mousedown', (e)=> { /* desktop fallback */ onTouchStart(e); document.addEventListener('mousemove', onTouchMove); document.addEventListener('mouseup', (ev)=> { document.removeEventListener('mousemove', onTouchMove); onTouchEnd(ev); }, {once:true}); });
+
+      // allow editing and toggling with taps
+      itemEl.addEventListener('click', (e) => {
+        // ignore clicks that came from the checkbox or handle
+        if(e.target === cb || e.target === drag) return;
+        editItem(item.id);
+      });
+
+      listEl.appendChild(itemEl);
+    });
+
+    statsEl.textContent = `Total: ${items.length} · Packed: ${items.filter(i=>i.done).length} · Showing: ${shownCount}`;
+    save();
+  }
+
+  // Actions
+  function addItem(text){
+    const trimmed = String(text || '').trim();
+    if(!trimmed) return;
+    items.push({ id: uid(), text: trimmed, done: false, createdAt: Date.now() });
+    newItemInput.value = '';
+    render();
+    newItemInput.focus();
+  }
+
+  function toggleDone(id){
+    const it = items.find(i => i.id === id);
+    if(!it) return;
+    it.done = !it.done;
+    render();
+  }
+
+  function editItem(id){
+    const it = items.find(i => i.id === id);
+    if(!it) return;
+    const newText = prompt('Edit item', it.text);
+    if(newText === null) return;
+    const t = newText.trim();
+    if(t.length === 0) {
+      alert('Item cannot be empty.');
+      return;
+    }
+    it.text = t;
+    render();
+  }
+
+  // Export / import
+  exportBtn.addEventListener('click', () => {
+    const payload = JSON.stringify({ items, createdAt: new Date().toISOString() }, null, 2);
+    const blob = new Blob([payload], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'trip-checklist.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  importBtn.addEventListener('click', async () => {
+    const text = prompt('Paste JSON exported from this app. Import replaces current list.');
+    if(!text) return;
+    try {
+      const parsed = JSON.parse(text);
+      if(Array.isArray(parsed.items)) {
+        items = parsed.items.map(it => ({ id: it.id || uid(), text: it.text || '', done: !!it.done, createdAt: it.createdAt || Date.now() }));
+        render();
+        alert('Imported list.');
+      } else {
+        alert('JSON invalid: no "items" array found.');
+      }
+    } catch(e) {
+      alert('Invalid JSON: ' + e.message);
+    }
+  });
+
+  printBtn.addEventListener('click', () => window.print());
+
+  // UI wiring
+  addBtn.addEventListener('click', () => addItem(newItemInput.value));
+  newItemInput.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter') addItem(newItemInput.value);
+  });
+
+  toggleHidePackedBtn.addEventListener('click', () => {
+    hidePacked = !hidePacked;
+    toggleHidePackedBtn.textContent = hidePacked ? 'Show' : 'Hide';
+    render();
+  });
+
+  autoSortCheckbox.addEventListener('change', (e) => {
+    autoSort = !!e.target.checked;
+    render();
+  });
+
+  // Initialization
+  load();
+  render();
+
+  // default starter items if empty
+  if(items.length === 0) {
+    items = [
+      { id: uid(), text: 'Passport / ID', done:false, createdAt: Date.now() - 6000 },
+      { id: uid(), text: 'Wallet / Cards / Cash', done:false, createdAt: Date.now() - 5000 },
+      { id: uid(), text: 'Phone + Charger', done:false, createdAt: Date.now() - 4000 },
+      { id: uid(), text: 'Medications', done:false, createdAt: Date.now() - 3000 },
+      { id: uid(), text: 'Toiletries', done:false, createdAt: Date.now() - 2000 },
+      { id: uid(), text: 'Clothes (shirts, underwear, socks)', done:false, createdAt: Date.now() - 1000 },
+    ];
+    render();
+  }
+
+  // focus input on load and show keyboard when possible
+  setTimeout(()=> newItemInput.focus(), 250);
+
+  // simple haptic-like feedback (vibrate) on toggle if supported
+  const originalToggleDone = toggleDone;
+  toggleDone = function(id) {
+    originalToggleDone(id);
+    if(navigator.vibrate) navigator.vibrate(30);
+  };
+
+  // Expose for debugging
+  window._tripChecklist = { items, render };
+})();
+</script>
+</body>
+</html>
