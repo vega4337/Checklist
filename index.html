@@ -1,115 +1,177 @@
-import React, { useState } from ‘react’;
-import { Check, Plus, Trash2 } from ‘lucide-react’;
+<!DOCTYPE html>
 
-export default function PackingChecklist() {
-const [items, setItems] = useState([]);
-const [inputValue, setInputValue] = useState(’’);
-
-const addItem = () => {
-if (inputValue.trim()) {
-setItems([…items, { id: Date.now(), text: inputValue, packed: false }]);
-setInputValue(’’);
-}
-};
-
-const toggleItem = (id) => {
-setItems(items.map(item =>
-item.id === id ? { …item, packed: !item.packed } : item
-));
-};
-
-const deleteItem = (id) => {
-setItems(items.filter(item => item.id !== id));
-};
-
-const packedCount = items.filter(item => item.packed).length;
-const totalCount = items.length;
-const progress = totalCount > 0 ? (packedCount / totalCount) * 100 : 0;
-
-return (
-<div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-<div className="max-w-md mx-auto">
-<div className="bg-white rounded-2xl shadow-xl p-6 mb-4">
-<h1 className="text-3xl font-bold text-gray-800 mb-2">Trip Packing</h1>
-<p className="text-gray-500 text-sm mb-4">
-{packedCount} of {totalCount} items packed
-</p>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trip Packing Checklist</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div id="app" class="p-4">
+        <div class="max-w-md mx-auto">
+            <div class="bg-white rounded-2xl shadow-xl p-6 mb-4">
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">Trip Packing</h1>
+                <p class="text-gray-500 text-sm mb-4">
+                    <span id="packedCount">0</span> of <span id="totalCount">0</span> items packed
+                </p>
 
 ```
-      {totalCount > 0 && (
-        <div className="mb-6">
-          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-            <div 
-              className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+            <div id="progressBar" class="mb-6 hidden">
+                <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                    <div id="progressFill" class="bg-gradient-to-r from-blue-500 to-indigo-600 h-full rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="flex gap-2 mb-6">
+                <input
+                    type="text"
+                    id="itemInput"
+                    placeholder="Add item to pack..."
+                    class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 text-base"
+                />
+                <button
+                    id="addButton"
+                    class="bg-blue-500 text-white p-3 rounded-xl hover:bg-blue-600 active:scale-95 transition-all"
+                >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
+            </div>
         </div>
-      )}
 
-      <div className="flex gap-2 mb-6">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && addItem()}
-          placeholder="Add item to pack..."
-          className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 text-base"
-        />
-        <button
-          onClick={addItem}
-          className="bg-blue-500 text-white p-3 rounded-xl hover:bg-blue-600 active:scale-95 transition-all"
-        >
-          <Plus size={24} />
-        </button>
-      </div>
-    </div>
+        <div id="itemsList" class="space-y-2"></div>
 
-    <div className="space-y-2">
-      {items.map(item => (
-        <div
-          key={item.id}
-          className="bg-white rounded-xl shadow-md overflow-hidden transition-all"
-        >
-          <div className="flex items-center">
-            <button
-              onClick={() => toggleItem(item.id)}
-              className="flex-1 flex items-center gap-3 p-4 text-left active:bg-gray-50 transition-colors"
-            >
-              <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                item.packed 
-                  ? 'bg-green-500 border-green-500' 
-                  : 'border-gray-300'
-              }`}>
-                {item.packed && <Check size={16} className="text-white" strokeWidth={3} />}
-              </div>
-              <span className={`text-base flex-1 transition-all ${
-                item.packed 
-                  ? 'line-through text-gray-400' 
-                  : 'text-gray-800'
-              }`}>
-                {item.text}
-              </span>
-            </button>
-            <button
-              onClick={() => deleteItem(item.id)}
-              className="p-4 text-gray-400 hover:text-red-500 active:bg-gray-50 transition-colors"
-            >
-              <Trash2 size={20} />
-            </button>
-          </div>
+        <div id="emptyState" class="text-center py-12">
+            <p class="text-gray-400 text-lg">Start adding items to your packing list!</p>
         </div>
-      ))}
     </div>
-
-    {items.length === 0 && (
-      <div className="text-center py-12">
-        <p className="text-gray-400 text-lg">Start adding items to your packing list!</p>
-      </div>
-    )}
-  </div>
 </div>
+
+<script>
+    let items = [];
+
+    function saveItems() {
+        localStorage.setItem('packingList', JSON.stringify(items));
+    }
+
+    function loadItems() {
+        const saved = localStorage.getItem('packingList');
+        if (saved) {
+            items = JSON.parse(saved);
+            renderItems();
+        }
+    }
+
+    function addItem() {
+        const input = document.getElementById('itemInput');
+        const text = input.value.trim();
+        
+        if (text) {
+            items.push({
+                id: Date.now(),
+                text: text,
+                packed: false
+            });
+            input.value = '';
+            saveItems();
+            renderItems();
+        }
+    }
+
+    function toggleItem(id) {
+        items = items.map(item => 
+            item.id === id ? { ...item, packed: !item.packed } : item
+        );
+        saveItems();
+        renderItems();
+    }
+
+    function deleteItem(id) {
+        items = items.filter(item => item.id !== id);
+        saveItems();
+        renderItems();
+    }
+
+    function renderItems() {
+        const itemsList = document.getElementById('itemsList');
+        const emptyState = document.getElementById('emptyState');
+        const packedCount = items.filter(item => item.packed).length;
+        const totalCount = items.length;
+        
+        document.getElementById('packedCount').textContent = packedCount;
+        document.getElementById('totalCount').textContent = totalCount;
+        
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        
+        if (totalCount > 0) {
+            progressBar.classList.remove('hidden');
+            const progress = (packedCount / totalCount) * 100;
+            progressFill.style.width = progress + '%';
+            emptyState.classList.add('hidden');
+        } else {
+            progressBar.classList.add('hidden');
+            emptyState.classList.remove('hidden');
+        }
+        
+        itemsList.innerHTML = items.map(item => `
+            <div class="bg-white rounded-xl shadow-md overflow-hidden transition-all">
+                <div class="flex items-center">
+                    <button
+                        onclick="toggleItem(${item.id})"
+                        class="flex-1 flex items-center gap-3 p-4 text-left active:bg-gray-50 transition-colors"
+                    >
+                        <div class="w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                            item.packed 
+                                ? 'bg-green-500 border-green-500' 
+                                : 'border-gray-300'
+                        }">
+                            ${item.packed ? `
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                            ` : ''}
+                        </div>
+                        <span class="text-base flex-1 transition-all ${
+                            item.packed 
+                                ? 'line-through text-gray-400' 
+                                : 'text-gray-800'
+                        }">
+                            ${item.text}
+                        </span>
+                    </button>
+                    <button
+                        onclick="deleteItem(${item.id})"
+                        class="p-4 text-gray-400 hover:text-red-500 active:bg-gray-50 transition-colors"
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    document.getElementById('addButton').addEventListener('click', addItem);
+    document.getElementById('itemInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            addItem();
+        }
+    });
+
+    loadItems();
+</script>
 ```
 
-);
-}
+</body>
+</html>
