@@ -13,7 +13,7 @@
     </style>
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
-    <div id="app" class="p-4">
+    <div id="app" class="p-4 pb-20">
         <div class="max-w-md mx-auto">
             <div class="bg-white rounded-2xl shadow-xl p-6 mb-4">
                 <h1 class="text-3xl font-bold text-gray-800 mb-2">Trip Packing</h1>
@@ -45,6 +45,21 @@
                     </svg>
                 </button>
             </div>
+
+            <div class="flex gap-2">
+                <button
+                    id="saveListButton"
+                    class="flex-1 bg-green-500 text-white py-3 px-4 rounded-xl hover:bg-green-600 active:scale-95 transition-all font-medium"
+                >
+                    💾 Save List
+                </button>
+                <button
+                    id="loadListButton"
+                    class="flex-1 bg-purple-500 text-white py-3 px-4 rounded-xl hover:bg-purple-600 active:scale-95 transition-all font-medium"
+                >
+                    📂 Load List
+                </button>
+            </div>
         </div>
 
         <div id="itemsList" class="space-y-2"></div>
@@ -55,19 +70,80 @@
     </div>
 </div>
 
+<!-- Save Modal -->
+<div id="saveModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl p-6 max-w-sm w-full">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Save List</h2>
+        <input
+            type="text"
+            id="listNameInput"
+            placeholder="Enter list name (e.g., Beach Trip)"
+            class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 text-base mb-4"
+        />
+        <div class="flex gap-2">
+            <button
+                id="cancelSaveButton"
+                class="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-xl hover:bg-gray-300 active:scale-95 transition-all font-medium"
+            >
+                Cancel
+            </button>
+            <button
+                id="confirmSaveButton"
+                class="flex-1 bg-green-500 text-white py-3 px-4 rounded-xl hover:bg-green-600 active:scale-95 transition-all font-medium"
+            >
+                Save
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Load Modal -->
+<div id="loadModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl p-6 max-w-sm w-full max-h-96 overflow-auto">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Load List</h2>
+        <div id="savedListsContainer" class="space-y-2"></div>
+        <button
+            id="closeLoadButton"
+            class="w-full bg-gray-200 text-gray-700 py-3 px-4 rounded-xl hover:bg-gray-300 active:scale-95 transition-all font-medium mt-4"
+        >
+            Close
+        </button>
+    </div>
+</div>
+
 <script>
     let items = [];
+    let currentListName = 'current';
 
     function saveItems() {
-        localStorage.setItem('packingList', JSON.stringify(items));
+        const data = {
+            name: currentListName,
+            items: items,
+            lastModified: new Date().toISOString()
+        };
+        localStorage.setItem('packingList_' + currentListName, JSON.stringify(data));
     }
 
-    function loadItems() {
-        const saved = localStorage.getItem('packingList');
+    function loadItems(listName = 'current') {
+        const saved = localStorage.getItem('packingList_' + listName);
         if (saved) {
-            items = JSON.parse(saved);
+            const data = JSON.parse(saved);
+            items = data.items || [];
+            currentListName = listName;
             renderItems();
         }
+    }
+
+    function getSavedLists() {
+        const lists = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('packingList_') && key !== 'packingList_current') {
+                const data = JSON.parse(localStorage.getItem(key));
+                lists.push(data);
+            }
+        }
+        return lists.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
     }
 
     function addItem() {
@@ -162,6 +238,83 @@
         `).join('');
     }
 
+    function showSaveModal() {
+        document.getElementById('saveModal').classList.remove('hidden');
+        document.getElementById('listNameInput').focus();
+    }
+
+    function hideSaveModal() {
+        document.getElementById('saveModal').classList.add('hidden');
+        document.getElementById('listNameInput').value = '';
+    }
+
+    function saveCurrentList() {
+        const listName = document.getElementById('listNameInput').value.trim();
+        if (listName) {
+            const data = {
+                name: listName,
+                items: items,
+                lastModified: new Date().toISOString()
+            };
+            localStorage.setItem('packingList_' + listName, JSON.stringify(data));
+            hideSaveModal();
+            alert('List saved as "' + listName + '"!');
+        }
+    }
+
+    function showLoadModal() {
+        const savedLists = getSavedLists();
+        const container = document.getElementById('savedListsContainer');
+        
+        if (savedLists.length === 0) {
+            container.innerHTML = '<p class="text-gray-400 text-center py-4">No saved lists yet</p>';
+        } else {
+            container.innerHTML = savedLists.map(list => {
+                const date = new Date(list.lastModified).toLocaleDateString();
+                const itemCount = list.items.length;
+                return `
+                    <div class="flex items-center gap-2">
+                        <button
+                            onclick="loadSavedList('${list.name}')"
+                            class="flex-1 bg-gray-50 hover:bg-gray-100 p-4 rounded-xl text-left active:scale-95 transition-all"
+                        >
+                            <div class="font-medium text-gray-800">${list.name}</div>
+                            <div class="text-sm text-gray-500">${itemCount} items • ${date}</div>
+                        </button>
+                        <button
+                            onclick="deleteSavedList('${list.name}')"
+                            class="p-3 text-gray-400 hover:text-red-500 rounded-xl active:bg-gray-100 transition-all"
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        document.getElementById('loadModal').classList.remove('hidden');
+    }
+
+    function hideLoadModal() {
+        document.getElementById('loadModal').classList.add('hidden');
+    }
+
+    function loadSavedList(listName) {
+        loadItems(listName);
+        hideLoadModal();
+    }
+
+    function deleteSavedList(listName) {
+        if (confirm('Delete "' + listName + '"?')) {
+            localStorage.removeItem('packingList_' + listName);
+            showLoadModal();
+        }
+    }
+
+    // Event listeners
     document.getElementById('addButton').addEventListener('click', addItem);
     document.getElementById('itemInput').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
@@ -169,6 +322,19 @@
         }
     });
 
+    document.getElementById('saveListButton').addEventListener('click', showSaveModal);
+    document.getElementById('loadListButton').addEventListener('click', showLoadModal);
+    document.getElementById('cancelSaveButton').addEventListener('click', hideSaveModal);
+    document.getElementById('confirmSaveButton').addEventListener('click', saveCurrentList);
+    document.getElementById('closeLoadButton').addEventListener('click', hideLoadModal);
+    
+    document.getElementById('listNameInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            saveCurrentList();
+        }
+    });
+
+    // Load current list on startup
     loadItems();
 </script>
 ```
