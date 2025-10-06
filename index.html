@@ -10,13 +10,30 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
         }
+        .dragging {
+            opacity: 0.5;
+        }
+        .drag-over {
+            border-top: 3px solid #3b82f6;
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
     <div id="app" class="p-4 pb-20">
         <div class="max-w-md mx-auto">
             <div class="bg-white rounded-2xl shadow-xl p-6 mb-4">
-                <h1 class="text-3xl font-bold text-gray-800 mb-2">Trip Packing</h1>
+                <div class="flex items-center justify-between mb-2">
+                    <h1 class="text-3xl font-bold text-gray-800">Trip Packing</h1>
+                    <button
+                        id="newListButton"
+                        class="text-blue-500 hover:text-blue-600 font-medium text-sm"
+                    >
+                        + New
+                    </button>
+                </div>
+                <p class="text-gray-500 text-sm mb-1">
+                    <span id="currentListName" class="font-medium text-gray-700"></span>
+                </p>
                 <p class="text-gray-500 text-sm mb-4">
                     <span id="packedCount">0</span> of <span id="totalCount">0</span> items packed
                 </p>
@@ -28,7 +45,7 @@
                 </div>
             </div>
 
-            <div class="flex gap-2 mb-6">
+            <div class="flex gap-2 mb-4">
                 <input
                     type="text"
                     id="itemInput"
@@ -48,14 +65,14 @@
 
             <div class="flex gap-2">
                 <button
-                    id="saveListButton"
-                    class="flex-1 bg-green-500 text-white py-3 px-4 rounded-xl hover:bg-green-600 active:scale-95 transition-all font-medium"
+                    id="saveAsButton"
+                    class="flex-1 bg-green-500 text-white py-2.5 px-4 rounded-xl hover:bg-green-600 active:scale-95 transition-all font-medium text-sm"
                 >
-                    💾 Save List
+                    💾 Save As...
                 </button>
                 <button
                     id="loadListButton"
-                    class="flex-1 bg-purple-500 text-white py-3 px-4 rounded-xl hover:bg-purple-600 active:scale-95 transition-all font-medium"
+                    class="flex-1 bg-purple-500 text-white py-2.5 px-4 rounded-xl hover:bg-purple-600 active:scale-95 transition-all font-medium text-sm"
                 >
                     📂 Load List
                 </button>
@@ -70,10 +87,10 @@
     </div>
 </div>
 
-<!-- Save Modal -->
+<!-- Save As Modal -->
 <div id="saveModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
     <div class="bg-white rounded-2xl p-6 max-w-sm w-full">
-        <h2 class="text-2xl font-bold text-gray-800 mb-4">Save List</h2>
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Save List As</h2>
         <input
             type="text"
             id="listNameInput"
@@ -113,24 +130,48 @@
 
 <script>
     let items = [];
-    let currentListName = 'current';
+    let currentListName = null;
+    let draggedItem = null;
 
     function saveItems() {
-        const data = {
-            name: currentListName,
-            items: items,
-            lastModified: new Date().toISOString()
-        };
-        localStorage.setItem('packingList_' + currentListName, JSON.stringify(data));
+        if (currentListName) {
+            const data = {
+                name: currentListName,
+                items: items,
+                lastModified: new Date().toISOString()
+            };
+            localStorage.setItem('packingList_' + currentListName, JSON.stringify(data));
+        }
+        // Always save to temporary storage
+        localStorage.setItem('packingList_temp', JSON.stringify(items));
     }
 
-    function loadItems(listName = 'current') {
-        const saved = localStorage.getItem('packingList_' + listName);
-        if (saved) {
-            const data = JSON.parse(saved);
-            items = data.items || [];
-            currentListName = listName;
-            renderItems();
+    function loadItems(listName = null) {
+        if (listName) {
+            const saved = localStorage.getItem('packingList_' + listName);
+            if (saved) {
+                const data = JSON.parse(saved);
+                items = data.items || [];
+                currentListName = listName;
+            }
+        } else {
+            // Load from temp storage
+            const temp = localStorage.getItem('packingList_temp');
+            if (temp) {
+                items = JSON.parse(temp);
+            }
+            currentListName = null;
+        }
+        updateListNameDisplay();
+        renderItems();
+    }
+
+    function updateListNameDisplay() {
+        const display = document.getElementById('currentListName');
+        if (currentListName) {
+            display.textContent = currentListName;
+        } else {
+            display.textContent = 'Unsaved List';
         }
     }
 
@@ -138,7 +179,7 @@
         const lists = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key.startsWith('packingList_') && key !== 'packingList_current') {
+            if (key.startsWith('packingList_') && key !== 'packingList_temp') {
                 const data = JSON.parse(localStorage.getItem(key));
                 lists.push(data);
             }
@@ -176,6 +217,47 @@
         renderItems();
     }
 
+    function handleDragStart(e, index) {
+        draggedItem = index;
+        e.target.classList.add('dragging');
+    }
+
+    function handleDragEnd(e) {
+        e.target.classList.remove('dragging');
+        draggedItem = null;
+        document.querySelectorAll('.drag-over').forEach(el => {
+            el.classList.remove('drag-over');
+        });
+    }
+
+    function handleDragOver(e) {
+        e.preventDefault();
+    }
+
+    function handleDragEnter(e, index) {
+        if (draggedItem !== null && draggedItem !== index) {
+            e.currentTarget.classList.add('drag-over');
+        }
+    }
+
+    function handleDragLeave(e) {
+        e.currentTarget.classList.remove('drag-over');
+    }
+
+    function handleDrop(e, dropIndex) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+        
+        if (draggedItem !== null && draggedItem !== dropIndex) {
+            const newItems = [...items];
+            const [removed] = newItems.splice(draggedItem, 1);
+            newItems.splice(dropIndex, 0, removed);
+            items = newItems;
+            saveItems();
+            renderItems();
+        }
+    }
+
     function renderItems() {
         const itemsList = document.getElementById('itemsList');
         const emptyState = document.getElementById('emptyState');
@@ -198,12 +280,23 @@
             emptyState.classList.remove('hidden');
         }
         
-        itemsList.innerHTML = items.map(item => `
-            <div class="bg-white rounded-xl shadow-md overflow-hidden transition-all">
+        itemsList.innerHTML = items.map((item, index) => `
+            <div 
+                draggable="true"
+                data-index="${index}"
+                class="bg-white rounded-xl shadow-md overflow-hidden transition-all cursor-move"
+            >
                 <div class="flex items-center">
+                    <div class="p-4 text-gray-400">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </div>
                     <button
                         onclick="toggleItem(${item.id})"
-                        class="flex-1 flex items-center gap-3 p-4 text-left active:bg-gray-50 transition-colors"
+                        class="flex-1 flex items-center gap-3 p-4 pl-0 text-left active:bg-gray-50 transition-colors"
                     >
                         <div class="w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all ${
                             item.packed 
@@ -236,27 +329,34 @@
                 </div>
             </div>
         `).join('');
+
+        // Add drag and drop event listeners
+        document.querySelectorAll('[draggable="true"]').forEach((el, index) => {
+            el.addEventListener('dragstart', (e) => handleDragStart(e, index));
+            el.addEventListener('dragend', handleDragEnd);
+            el.addEventListener('dragover', handleDragOver);
+            el.addEventListener('dragenter', (e) => handleDragEnter(e, index));
+            el.addEventListener('dragleave', handleDragLeave);
+            el.addEventListener('drop', (e) => handleDrop(e, index));
+        });
     }
 
     function showSaveModal() {
+        document.getElementById('listNameInput').value = currentListName || '';
         document.getElementById('saveModal').classList.remove('hidden');
         document.getElementById('listNameInput').focus();
     }
 
     function hideSaveModal() {
         document.getElementById('saveModal').classList.add('hidden');
-        document.getElementById('listNameInput').value = '';
     }
 
     function saveCurrentList() {
         const listName = document.getElementById('listNameInput').value.trim();
         if (listName) {
-            const data = {
-                name: listName,
-                items: items,
-                lastModified: new Date().toISOString()
-            };
-            localStorage.setItem('packingList_' + listName, JSON.stringify(data));
+            currentListName = listName;
+            saveItems();
+            updateListNameDisplay();
             hideSaveModal();
             alert('List saved as "' + listName + '"!');
         }
@@ -272,6 +372,7 @@
             container.innerHTML = savedLists.map(list => {
                 const date = new Date(list.lastModified).toLocaleDateString();
                 const itemCount = list.items.length;
+                const packedCount = list.items.filter(item => item.packed).length;
                 return `
                     <div class="flex items-center gap-2">
                         <button
@@ -279,7 +380,7 @@
                             class="flex-1 bg-gray-50 hover:bg-gray-100 p-4 rounded-xl text-left active:scale-95 transition-all"
                         >
                             <div class="font-medium text-gray-800">${list.name}</div>
-                            <div class="text-sm text-gray-500">${itemCount} items • ${date}</div>
+                            <div class="text-sm text-gray-500">${packedCount}/${itemCount} packed • ${date}</div>
                         </button>
                         <button
                             onclick="deleteSavedList('${list.name}')"
@@ -310,8 +411,23 @@
     function deleteSavedList(listName) {
         if (confirm('Delete "' + listName + '"?')) {
             localStorage.removeItem('packingList_' + listName);
+            if (currentListName === listName) {
+                currentListName = null;
+                updateListNameDisplay();
+            }
             showLoadModal();
         }
+    }
+
+    function newList() {
+        if (items.length > 0 && !confirm('Start a new list? Current items will be cleared.')) {
+            return;
+        }
+        items = [];
+        currentListName = null;
+        updateListNameDisplay();
+        saveItems();
+        renderItems();
     }
 
     // Event listeners
@@ -322,8 +438,9 @@
         }
     });
 
-    document.getElementById('saveListButton').addEventListener('click', showSaveModal);
+    document.getElementById('saveAsButton').addEventListener('click', showSaveModal);
     document.getElementById('loadListButton').addEventListener('click', showLoadModal);
+    document.getElementById('newListButton').addEventListener('click', newList);
     document.getElementById('cancelSaveButton').addEventListener('click', hideSaveModal);
     document.getElementById('confirmSaveButton').addEventListener('click', saveCurrentList);
     document.getElementById('closeLoadButton').addEventListener('click', hideLoadModal);
@@ -334,7 +451,7 @@
         }
     });
 
-    // Load current list on startup
+    // Load on startup
     loadItems();
 </script>
 ```
