@@ -1,460 +1,684 @@
-<!DOCTYPE html>
-
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trip Packing Checklist</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-        }
-        .dragging {
-            opacity: 0.5;
-        }
-        .drag-over {
-            border-top: 3px solid #3b82f6;
-        }
-    </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>ORBIT SUM — a fresh numbers game</title>
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#0b1020" />
+
+<style>
+  /* =========================================================
+     ORBIT SUM — (c) 2025 Carlos' custom build, created by ChatGPT
+     One-file, mobile-first, GitHub Pages–ready.
+     ========================================================= */
+
+  :root{
+    --bg: #0b1020;
+    --bg2:#0f1530;
+    --fg: #eaf2ff;
+    --muted:#9fb2d6;
+    --ring: rgba(255,255,255,0.08);
+    --tile: #1a223b;
+    --tileEdge: rgba(255,255,255,0.15);
+    --accent: #44f0ff;
+    --accent2:#8aff82;
+    --danger:#ff5c7a;
+    --gold:#ffd86b;
+    --shadow: 0 10px 25px rgba(0,0,0,0.35);
+    --glow: 0 0 20px rgba(68,240,255,.35), 0 0 1px rgba(68,240,255,.9) inset;
+    --gateGlow: 0 0 24px rgba(255,216,107,.55), 0 0 1px rgba(255,216,107,.95) inset;
+    --radiusRatio: .38; /* % of board min dimension */
+  }
+
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f4f7ff; --bg2:#e7ecff; --fg:#0b1020; --muted:#3b4a6e; --ring: rgba(0,0,0,0.07); --tile:#eaf0ff; --tileEdge: rgba(0,0,0,0.1); }
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ height:100%; margin:0; background: radial-gradient(1200px 800px at 50% -10%, var(--bg2), var(--bg)); color:var(--fg); font: 500 16px/1.35 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif; }
+  #app{ max-width: 820px; margin: 0 auto; padding: env(safe-area-inset-top) 12px calc(14px + env(safe-area-inset-bottom));
+        min-height:100%; display:flex; flex-direction:column; gap:8px; }
+
+  /* Top bar */
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:8px 6px; }
+  .brand{ font-weight:800; letter-spacing:1px; font-size:18px; display:flex; align-items:center; gap:8px; }
+  .brand:before{ content:"◎"; color:var(--accent); text-shadow:0 0 10px rgba(68,240,255,.6); }
+  .top-controls button{ background:transparent; color:var(--fg); border:1px solid rgba(255,255,255,0.2); border-radius:10px; padding:6px 10px; margin-left:6px; font-weight:700; }
+  .top-controls button:active{ transform:scale(.96); }
+
+  /* Stats */
+  .stats{ display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; padding:6px; }
+  .stats>div{ background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+              border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:8px 10px; box-shadow:var(--shadow); }
+  .stats label{ display:block; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+  .stats span{ font-size:18px; font-weight:800; }
+
+  /* Board */
+  #board{ position:relative; flex:1; min-height: 60vh; border-radius:16px; border:1px solid rgba(255,255,255,0.1);
+          background: radial-gradient(60% 60% at 50% 50%, rgba(68,240,255,.06), transparent 60%),
+                      radial-gradient(30% 30% at 50% 50%, rgba(255,216,107,.1), transparent 60%),
+                      linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.12));
+          box-shadow: var(--shadow); overflow:hidden; }
+
+  /* Ring surface */
+  #ring{ position:absolute; inset:0; }
+  .ringCircle{ position:absolute; left:50%; top:50%; width: min(82vmin, 600px); height: min(82vmin, 600px);
+               transform: translate(-50%, -50%); border-radius:50%; border: 8px solid var(--ring); }
+
+  /* Gate (top) */
+  #gate{ position:absolute; left:50%; top:10px; width: 0; height: calc(50% - 10px); pointer-events:none; }
+  #gate .tick{ position:absolute; left:-2px; top:0; width:4px; height:22px; background: var(--gold); border-radius:3px;
+               box-shadow: var(--gateGlow); }
+  #gate:after{ content:""; position:absolute; left:-12px; top:18px; width:24px; height:6px; background:linear-gradient(90deg, transparent, var(--gold), transparent);
+               border-radius: 3px; opacity:.85; filter: blur(.5px); }
+
+  /* Center info */
+  #center{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); text-align:center; }
+  .centerDisc{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+               width: min(44vmin, 340px); height:min(44vmin, 340px); border-radius:50%;
+               background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(0,0,0,0.15));
+               border: 1px solid rgba(255,255,255,0.18); box-shadow: var(--shadow); }
+  .targetText{ position:relative; z-index:2; font-size:14px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-top:8px; }
+  .targetValue{ font-size: clamp(40px, 8.5vmin, 72px); font-weight:900; letter-spacing:1px; text-shadow: 0 3px 18px rgba(0,0,0,.35); }
+  .sumText{ position:relative; z-index:2; margin-top:4px; font-size:13px; color:var(--muted); }
+  .sumValue{ font-size: clamp(24px, 6.5vmin, 42px); font-weight:800; }
+
+  /* Tiles */
+  .tile{ position:absolute; width: clamp(42px, 12.5vmin, 64px); height: clamp(42px, 12.5vmin, 64px);
+         background: radial-gradient(160% 140% at 30% 30%, rgba(255,255,255,0.22), rgba(255,255,255,0.05)),
+                     linear-gradient(180deg, var(--tile), rgba(0,0,0,0.25));
+         border:1px solid var(--tileEdge); border-radius:14px; display:flex; align-items:center; justify-content:center;
+         font-weight:900; font-size: clamp(20px, 6vmin, 30px); color:#eaf6ff; box-shadow: var(--glow), var(--shadow); }
+  .tile.pop{ animation: pop .28s ease-out; }
+  @keyframes pop{ 0%{ transform: scale(1); } 50%{ transform: scale(1.16); } 100%{ transform: scale(1);} }
+
+  /* Controls */
+  #controls{ display:grid; grid-template-columns: 1fr auto 1fr; gap:8px; padding:8px; }
+  #controls button{ padding:14px 12px; border-radius:12px; font-weight:800; font-size:16px;
+                    border:1px solid rgba(255,255,255,0.2); background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(0,0,0,0.15));
+                    color:var(--fg); box-shadow: var(--shadow); }
+  #controls button.hold{ font-size:18px; }
+  #controls button:active{ transform: translateY(1px) scale(.98); }
+  #brakeBtn{ border-color: rgba(255,216,107,.45); }
+  #brakeBtn strong{ color:var(--gold); }
+
+  /* Overlay */
+  .overlay{ position: absolute; inset: 0; background: rgba(0,0,0,.55);
+            display:none; align-items:center; justify-content:center; backdrop-filter: blur(4px); z-index: 30; }
+  .overlay.show{ display:flex; }
+  .card{ width:min(560px, 92vw); background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(0,0,0,0.22));
+         border:1px solid rgba(255,255,255,0.25); border-radius:16px; padding:18px; box-shadow: var(--shadow); }
+  .card h1{ margin:.2em 0 .2em; font-size: clamp(20px, 6.5vmin, 34px); }
+  .card p{ color:var(--fg); opacity:.95; }
+  .btnRow{ display:flex; gap:10px; flex-wrap:wrap; }
+  .card button{ padding:12px 14px; border-radius:12px; font-weight:900; border:1px solid rgba(255,255,255,0.2);
+                background: linear-gradient(180deg, rgba(255,255,255,0.1), rgba(0,0,0,0.25)); color:var(--fg); }
+  .small{ font-size:13px; color:var(--muted); }
+
+  /* Feedback */
+  .flash{ animation: flash .45s ease-out; }
+  @keyframes flash{ 0%{ background: rgba(255,92,122,.0);} 20%{ background: rgba(255,92,122,.25);} 100%{ background: rgba(255,92,122,.0);} }
+  .shake{ animation: shake .3s ease-in-out; }
+  @keyframes shake{ 0%{ transform:translateX(0);} 25%{ transform:translateX(-6px);} 50%{ transform:translateX(4px);} 75%{ transform:translateX(-3px);} 100%{ transform:translateX(0);} }
+
+  /* Tiny badge lines */
+  .badge{ display:inline-block; padding:4px 8px; border-radius:999px; background:rgba(68,240,255,.12);
+          border:1px solid rgba(68,240,255,.35); color:var(--accent); font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:.4px; }
+
+  /* Prevent text selection while playing */
+  .noselect, #controls button, .top-controls button, .tile { user-select:none; -webkit-user-select:none; }
+
+</style>
 </head>
-<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
-    <div id="app" class="p-4 pb-20">
-        <div class="max-w-md mx-auto">
-            <div class="bg-white rounded-2xl shadow-xl p-6 mb-4">
-                <div class="flex items-center justify-between mb-2">
-                    <h1 class="text-3xl font-bold text-gray-800">Trip Packing</h1>
-                    <button
-                        id="newListButton"
-                        class="text-blue-500 hover:text-blue-600 font-medium text-sm"
-                    >
-                        + New
-                    </button>
-                </div>
-                <p class="text-gray-500 text-sm mb-1">
-                    <span id="currentListName" class="font-medium text-gray-700"></span>
-                </p>
-                <p class="text-gray-500 text-sm mb-4">
-                    <span id="packedCount">0</span> of <span id="totalCount">0</span> items packed
-                </p>
+<body>
+<div id="app">
 
-```
-            <div id="progressBar" class="mb-6 hidden">
-                <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                    <div id="progressFill" class="bg-gradient-to-r from-blue-500 to-indigo-600 h-full rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
-                </div>
-            </div>
-
-            <div class="flex gap-2 mb-4">
-                <input
-                    type="text"
-                    id="itemInput"
-                    placeholder="Add item to pack..."
-                    class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 text-base"
-                />
-                <button
-                    id="addButton"
-                    class="bg-blue-500 text-white p-3 rounded-xl hover:bg-blue-600 active:scale-95 transition-all"
-                >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                </button>
-            </div>
-
-            <div class="flex gap-2">
-                <button
-                    id="saveAsButton"
-                    class="flex-1 bg-green-500 text-white py-2.5 px-4 rounded-xl hover:bg-green-600 active:scale-95 transition-all font-medium text-sm"
-                >
-                    💾 Save As...
-                </button>
-                <button
-                    id="loadListButton"
-                    class="flex-1 bg-purple-500 text-white py-2.5 px-4 rounded-xl hover:bg-purple-600 active:scale-95 transition-all font-medium text-sm"
-                >
-                    📂 Load List
-                </button>
-            </div>
-        </div>
-
-        <div id="itemsList" class="space-y-2"></div>
-
-        <div id="emptyState" class="text-center py-12">
-            <p class="text-gray-400 text-lg">Start adding items to your packing list!</p>
-        </div>
+  <header class="topbar">
+    <div class="brand">ORBIT SUM</div>
+    <div class="top-controls">
+      <button id="helpBtn" aria-label="How to play">❔ Help</button>
+      <button id="muteBtn" aria-label="Toggle sound">🔈 Sound</button>
+      <button id="pauseBtn" aria-label="Pause">⏸ Pause</button>
     </div>
-</div>
+  </header>
 
-<!-- Save As Modal -->
-<div id="saveModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-2xl p-6 max-w-sm w-full">
-        <h2 class="text-2xl font-bold text-gray-800 mb-4">Save List As</h2>
-        <input
-            type="text"
-            id="listNameInput"
-            placeholder="Enter list name (e.g., Beach Trip)"
-            class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 text-base mb-4"
-        />
-        <div class="flex gap-2">
-            <button
-                id="cancelSaveButton"
-                class="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-xl hover:bg-gray-300 active:scale-95 transition-all font-medium"
-            >
-                Cancel
-            </button>
-            <button
-                id="confirmSaveButton"
-                class="flex-1 bg-green-500 text-white py-3 px-4 rounded-xl hover:bg-green-600 active:scale-95 transition-all font-medium"
-            >
-                Save
-            </button>
-        </div>
-    </div>
-</div>
+  <section class="stats">
+    <div><label>Score</label><span id="score">0</span></div>
+    <div><label>High</label><span id="high">0</span></div>
+    <div><label>Level</label><span id="level">1</span></div>
+    <div><label>Lives</label><span id="lives">❤❤❤</span></div>
+  </section>
 
-<!-- Load Modal -->
-<div id="loadModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-2xl p-6 max-w-sm w-full max-h-96 overflow-auto">
-        <h2 class="text-2xl font-bold text-gray-800 mb-4">Load List</h2>
-        <div id="savedListsContainer" class="space-y-2"></div>
-        <button
-            id="closeLoadButton"
-            class="w-full bg-gray-200 text-gray-700 py-3 px-4 rounded-xl hover:bg-gray-300 active:scale-95 transition-all font-medium mt-4"
-        >
-            Close
-        </button>
+  <main id="board">
+    <div id="ring">
+      <div class="ringCircle" aria-hidden="true"></div>
+      <!-- Tiles injected by JS -->
     </div>
+
+    <div id="gate" aria-hidden="true"><div class="tick"></div></div>
+
+    <div id="center" class="noselect" aria-live="polite">
+      <div class="centerDisc" aria-hidden="true"></div>
+      <div class="targetText">Target</div>
+      <div class="targetValue" id="target">—</div>
+      <div class="sumText">Sum</div>
+      <div class="sumValue" id="sum">0</div>
+      <div class="small" id="notice"></div>
+    </div>
+  </main>
+
+  <section id="controls">
+    <button id="leftBtn" class="hold" aria-label="Hold to spin left">◀︎ Spin</button>
+    <button id="brakeBtn" aria-label="Slow the ring briefly"><strong>Brake</strong> × <span id="brakes">3</span></button>
+    <button id="rightBtn" class="hold" aria-label="Hold to spin right">Spin ▶︎</button>
+  </section>
+
+  <!-- Overlays -->
+  <div id="startOverlay" class="overlay show" role="dialog" aria-modal="true">
+    <div class="card">
+      <div class="badge">New number game</div>
+      <h1>ORBIT SUM</h1>
+      <p><strong>Spin the ring. Hit the exact target. Don’t bust.</strong></p>
+      <ul>
+        <li>Hold <em>Spin</em> buttons to rotate the ring.</li>
+        <li>Every tile crossing the <strong>top gate</strong> is added to your <strong>SUM</strong>.</li>
+        <li>Match the <strong>TARGET</strong> exactly to level up and score.</li>
+        <li>Overshoot? You lose a life and SUM resets.</li>
+        <li>Use <strong>Brake</strong> to steady your timing (limited).</li>
+      </ul>
+      <div class="btnRow">
+        <button id="startBtn">▶ Start</button>
+        <button id="howBtn">How to play</button>
+      </div>
+      <p class="small" style="margin-top:10px;">Designed for iPhone. One file. GitHub Pages–ready. Saves highscores locally.</p>
+    </div>
+  </div>
+
+  <div id="helpOverlay" class="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h1>How to Play</h1>
+      <ol>
+        <li>Hold left/right <strong>Spin</strong> to rotate the ring.</li>
+        <li>As tiles pass the <strong>top gate</strong>, their number is added to <strong>SUM</strong>.</li>
+        <li>Reach the <strong>TARGET</strong> exactly. You’ll level up, score a bonus, and the ring gets trickier.</li>
+        <li><strong>Overshoot</strong> the target and you lose a life. SUM resets to 0.</li>
+        <li>Tap <strong>Brake</strong> to greatly slow rotation for a moment. Charges refill when you hit a target.</li>
+      </ol>
+      <p class="small">Tip: feather the spin—short holds nudge the ring; longer holds whip it. Watch for patterns to set up clean finishes.</p>
+      <div class="btnRow">
+        <button id="closeHelpBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pauseOverlay" class="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h1>Paused</h1>
+      <div class="btnRow">
+        <button id="resumeBtn">Resume</button>
+        <button id="restartBtn">Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="gameOverOverlay" class="overlay" role="dialog" aria-modal="true">
+    <div class="card">
+      <h1>Game Over</h1>
+      <p>Score: <strong id="finalScore">0</strong> · Level: <strong id="finalLevel">1</strong></p>
+      <div class="btnRow">
+        <button id="againBtn">Play Again</button>
+        <button id="shareBtn">Share</button>
+      </div>
+      <p class="small">High score is saved on this device.</p>
+    </div>
+  </div>
+
 </div>
 
 <script>
-    let items = [];
-    let currentListName = null;
-    let draggedItem = null;
+(() => {
+  'use strict';
 
-    function saveItems() {
-        if (currentListName) {
-            const data = {
-                name: currentListName,
-                items: items,
-                lastModified: new Date().toISOString()
-            };
-            localStorage.setItem('packingList_' + currentListName, JSON.stringify(data));
+  /* ---------------------------
+     Game configuration
+  ---------------------------- */
+  const TILE_COUNT = 12;
+  const MIN_VAL = 1, MAX_VAL = 9;
+  const START_LIVES = 3;
+  const START_BRAKES = 3;
+  const BASE_OMEGA = 28; // deg / sec (auto rotation)
+  const HOLD_OMEGA = 95; // deg / sec (player hold)
+  const BRAKE_FACTOR = 0.12; // slow to 12% speed while braking
+  const BRAKE_MS = 650; // brake duration
+  const TARGET_MIN = 12, TARGET_MAX = 27; // starting target range
+  const GATE_HALF_DEG_START = 8.0; // +/- degrees from top line
+  const GATE_HALF_DEG_MIN = 3.5;   // minimum as difficulty grows
+  const DIFFICULTY_PER_LEVEL = 1.06; // omega multiplier per level
+  const GATE_SHRINK_PER_LEVEL = 0.35; // degrees per level
+  const VALUE_WEIGHTS = [0,1,1,1,1,1,1,1,1,1]; // simple uniform 1..9
+
+  /* ---------------------------
+     DOM references
+  ---------------------------- */
+  const el = {
+    board: document.getElementById('board'),
+    ring: document.getElementById('ring'),
+    gate: document.getElementById('gate'),
+    score: document.getElementById('score'),
+    high: document.getElementById('high'),
+    level: document.getElementById('level'),
+    lives: document.getElementById('lives'),
+    target: document.getElementById('target'),
+    sum: document.getElementById('sum'),
+    notice: document.getElementById('notice'),
+    leftBtn: document.getElementById('leftBtn'),
+    rightBtn: document.getElementById('rightBtn'),
+    brakeBtn: document.getElementById('brakeBtn'),
+    brakes: document.getElementById('brakes'),
+    muteBtn: document.getElementById('muteBtn'),
+    pauseBtn: document.getElementById('pauseBtn'),
+    helpBtn: document.getElementById('helpBtn'),
+    startOverlay: document.getElementById('startOverlay'),
+    helpOverlay: document.getElementById('helpOverlay'),
+    pauseOverlay: document.getElementById('pauseOverlay'),
+    gameOverOverlay: document.getElementById('gameOverOverlay'),
+    startBtn: document.getElementById('startBtn'),
+    howBtn: document.getElementById('howBtn'),
+    closeHelpBtn: document.getElementById('closeHelpBtn'),
+    resumeBtn: document.getElementById('resumeBtn'),
+    restartBtn: document.getElementById('restartBtn'),
+    againBtn: document.getElementById('againBtn'),
+    shareBtn: document.getElementById('shareBtn'),
+    finalScore: document.getElementById('finalScore'),
+    finalLevel: document.getElementById('finalLevel'),
+  };
+
+  /* ---------------------------
+     State
+  ---------------------------- */
+  let tiles = []; // {el, baseDeg, wasInGate, val}
+  let w = 0, h = 0, cx = 0, cy = 0, radius = 0;
+  let theta = 0;             // ring rotation in degrees
+  let omegaBase = BASE_OMEGA;// auto angular speed
+  let holdLeft = false, holdRight = false;
+  let brakingUntil = 0;
+  let lastTime = performance.now();
+  let running = false, paused = false, gameOver = false;
+  let level = 1, score = 0, high = +localStorage.getItem('orbitsum_high')||0;
+  let lives = START_LIVES;
+  let target = 0, sum = 0;
+  let gateHalfDeg = GATE_HALF_DEG_START;
+  let brakeCharges = START_BRAKES;
+  let muted = false;
+  let audioCtx = null;
+
+  el.high.textContent = String(high);
+
+  /* ---------------------------
+     Utilities
+  ---------------------------- */
+  const randInt = (a,b)=> Math.floor(Math.random()*(b-a+1))+a;
+  const clamp   = (x,a,b)=> Math.max(a, Math.min(b,x));
+  const now     = ()=> performance.now();
+  const normDeg = (d)=> { d = d%360; if(d>180) d-=360; if(d<=-180) d+=360; return d; };
+
+  function chooseValue(){
+    // simple uniform 1..9, easy to tweak with weights
+    return randInt(MIN_VAL, MAX_VAL);
+  }
+
+  function vibrate(pattern){
+    try{ if(!muted && navigator.vibrate) navigator.vibrate(pattern); }catch{}
+  }
+
+  function ensureAudio(){
+    if(muted) return;
+    if(!audioCtx){
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if(Ctx) audioCtx = new Ctx();
+    }
+  }
+
+  function beep(freq=520, ms=80, type='sine', vol=0.05){
+    if(muted || !audioCtx) return;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    o.stop(audioCtx.currentTime + ms/1000);
+  }
+
+  function setNotice(msg='', color=''){
+    el.notice.textContent = msg;
+    el.notice.style.color = color || 'inherit';
+    if(msg){
+      el.notice.classList.remove('flash');
+      void el.notice.offsetWidth;
+      el.notice.classList.add('flash');
+    }
+  }
+
+  function setHearts(n){
+    el.lives.textContent = '❤'.repeat(n);
+    el.lives.style.color = n<=1 ? 'var(--danger)' : 'inherit';
+  }
+
+  function setBrakes(n){
+    el.brakes.textContent = String(n);
+  }
+
+  function newTarget(baseMin = TARGET_MIN, baseMax = TARGET_MAX){
+    // scale a bit with level
+    const L = clamp(level, 1, 50);
+    const min = baseMin + Math.floor(L*0.2);
+    const max = baseMax + Math.floor(L*0.4);
+    target = randInt(min, max);
+    el.target.textContent = String(target);
+    setNotice('New target!', 'var(--accent2)');
+  }
+
+  /* ---------------------------
+     Layout & tiles
+  ---------------------------- */
+  function layout(){
+    const rect = el.board.getBoundingClientRect();
+    w = rect.width; h = rect.height;
+    cx = w/2; cy = h/2;
+    radius = Math.min(w,h) * parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--radiusRatio'));
+    positionTiles();
+  }
+
+  function createTiles(){
+    tiles = [];
+    el.ring.querySelectorAll('.tile').forEach(n=>n.remove());
+    for(let i=0;i<TILE_COUNT;i++){
+      const t = document.createElement('div');
+      t.className = 'tile';
+      const baseDeg = i*(360/TILE_COUNT);
+      const val = chooseValue();
+      t.textContent = val;
+      el.ring.appendChild(t);
+      tiles.push({ el:t, baseDeg, wasInGate:false, val });
+    }
+    positionTiles();
+  }
+
+  function positionTiles(){
+    // place each tile at angle = baseDeg + theta
+    for(const t of tiles){
+      const deg = (t.baseDeg + theta) % 360;
+      const rad = deg * Math.PI/180;
+      const x = cx + radius * Math.sin(rad);
+      const y = cy - radius * Math.cos(rad);
+      t.el.style.left = (x - t.el.offsetWidth/2) + 'px';
+      t.el.style.top  = (y - t.el.offsetHeight/2) + 'px';
+    }
+  }
+
+  /* ---------------------------
+     Core game loop
+  ---------------------------- */
+  function update(){
+    if(!running || paused) { lastTime = now(); requestAnimationFrame(update); return; }
+    const t = now();
+    const dt = Math.min(0.035, (t - lastTime)/1000); // clamp big jumps
+    lastTime = t;
+
+    // Effective speed
+    let omega = omegaBase;
+    if(holdLeft)  omega -= HOLD_OMEGA;
+    if(holdRight) omega += HOLD_OMEGA;
+    omega = clamp(omega, -240, 240);
+
+    // Brake
+    if(t < brakingUntil) omega *= BRAKE_FACTOR;
+
+    theta = (theta + omega * dt) % 360;
+
+    // Gate detection + render
+    let justCollected = false;
+    for(const tile of tiles){
+      const deg = (tile.baseDeg + theta) % 360;
+      // in our coordinate system, gate is at 0 deg (top)
+      const d = Math.abs(normDeg(deg));
+      if(d <= gateHalfDeg){
+        if(!tile.wasInGate){
+          collect(tile);
+          tile.wasInGate = true;
+          justCollected = true;
         }
-        // Always save to temporary storage
-        localStorage.setItem('packingList_temp', JSON.stringify(items));
+      }else{
+        tile.wasInGate = false;
+      }
     }
 
-    function loadItems(listName = null) {
-        if (listName) {
-            const saved = localStorage.getItem('packingList_' + listName);
-            if (saved) {
-                const data = JSON.parse(saved);
-                items = data.items || [];
-                currentListName = listName;
-            }
-        } else {
-            // Load from temp storage
-            const temp = localStorage.getItem('packingList_temp');
-            if (temp) {
-                items = JSON.parse(temp);
-            }
-            currentListName = null;
-        }
-        updateListNameDisplay();
-        renderItems();
+    positionTiles();
+
+    // Subtle blip when something crosses gate
+    if(justCollected){
+      el.board.classList.remove('flash');
+      void el.board.offsetWidth;
+      el.board.classList.add('flash');
     }
 
-    function updateListNameDisplay() {
-        const display = document.getElementById('currentListName');
-        if (currentListName) {
-            display.textContent = currentListName;
-        } else {
-            display.textContent = 'Unsaved List';
-        }
+    requestAnimationFrame(update);
+  }
+
+  function collect(tile){
+    // feedback
+    tile.el.classList.remove('pop'); void tile.el.offsetWidth; tile.el.classList.add('pop');
+    ensureAudio();
+    beep(440 + tile.val*24, 70, 'triangle', 0.035);
+    vibrate(18);
+
+    sum += tile.val;
+    el.sum.textContent = String(sum);
+
+    // Re-roll the tile value immediately (stays at the same place)
+    tile.val = chooseValue();
+    tile.el.textContent = tile.val;
+
+    // Check win/bust
+    if(sum === target){
+      onHitTarget();
+    }else if(sum > target){
+      onBust();
     }
+  }
 
-    function getSavedLists() {
-        const lists = [];
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key.startsWith('packingList_') && key !== 'packingList_temp') {
-                const data = JSON.parse(localStorage.getItem(key));
-                lists.push(data);
-            }
-        }
-        return lists.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+  function onHitTarget(){
+    score += 100 + Math.floor(level*35);
+    level += 1;
+    // difficulty rise
+    omegaBase = BASE_OMEGA * Math.pow(DIFFICULTY_PER_LEVEL, level-1);
+    gateHalfDeg = Math.max(GATE_HALF_DEG_MIN, GATE_HALF_DEG_START - (level-1)*GATE_SHRINK_PER_LEVEL);
+
+    // rewards
+    brakeCharges = Math.min(5, brakeCharges + 1);
+    setBrakes(brakeCharges);
+
+    // reset sum & new target
+    sum = 0;
+    el.sum.textContent = '0';
+    newTarget();
+
+    // UI feedback
+    setNotice('Perfect!', 'var(--accent)');
+    el.board.classList.add('shake'); setTimeout(()=>el.board.classList.remove('shake'), 180);
+    ensureAudio(); beep(720, 110, 'square', 0.06); beep(860, 130, 'sine', 0.05);
+    vibrate([25,30,25]);
+
+    updateUI();
+  }
+
+  function onBust(){
+    lives -= 1;
+    sum = 0;
+    el.sum.textContent = '0';
+    setHearts(lives);
+    setNotice('Bust!', 'var(--danger)');
+    ensureAudio(); beep(180, 120, 'sawtooth', 0.05);
+    vibrate([60,40,60]);
+
+    if(lives <= 0){
+      endGame();
     }
+  }
 
-    function addItem() {
-        const input = document.getElementById('itemInput');
-        const text = input.value.trim();
-        
-        if (text) {
-            items.push({
-                id: Date.now(),
-                text: text,
-                packed: false
-            });
-            input.value = '';
-            saveItems();
-            renderItems();
-        }
+  function updateUI(){
+    el.score.textContent = String(score);
+    el.level.textContent = String(level);
+    if(score > high){
+      high = score;
+      el.high.textContent = String(high);
+      localStorage.setItem('orbitsum_high', String(high));
     }
+  }
 
-    function toggleItem(id) {
-        items = items.map(item => 
-            item.id === id ? { ...item, packed: !item.packed } : item
-        );
-        saveItems();
-        renderItems();
+  /* ---------------------------
+     Lifecycle
+  ---------------------------- */
+  function startGame(){
+    running = true; paused = false; gameOver = false;
+    level = 1; score = 0; lives = START_LIVES; sum = 0;
+    omegaBase = BASE_OMEGA;
+    gateHalfDeg = GATE_HALF_DEG_START;
+    brakeCharges = START_BRAKES;
+    setHearts(lives);
+    setBrakes(brakeCharges);
+    el.sum.textContent = '0'; el.notice.textContent = '';
+    newTarget();
+    createTiles();
+    layout();
+    lastTime = now();
+    requestAnimationFrame(update);
+  }
+
+  function endGame(){
+    running = false; gameOver = true;
+    el.finalScore.textContent = String(score);
+    el.finalLevel.textContent = String(level);
+    el.gameOverOverlay.classList.add('show');
+  }
+
+  function pauseGame(){
+    if(!running || gameOver) return;
+    paused = true;
+    el.pauseOverlay.classList.add('show');
+  }
+
+  function resumeGame(){
+    if(!running || gameOver) return;
+    paused = false;
+    el.pauseOverlay.classList.remove('show');
+    lastTime = now();
+  }
+
+  /* ---------------------------
+     Controls & events
+  ---------------------------- */
+  function holdStart(dir){
+    if(dir<0) holdLeft = true; else holdRight = true;
+  }
+  function holdEnd(dir){
+    if(dir<0) holdLeft = false; else holdRight = false;
+  }
+
+  function addHoldHandlers(btn, dir){
+    // Pointer events cover mouse + touch on modern Safari
+    btn.addEventListener('pointerdown', ()=>holdStart(dir));
+    const end = ()=>holdEnd(dir);
+    btn.addEventListener('pointerup', end);
+    btn.addEventListener('pointercancel', end);
+    btn.addEventListener('pointerleave', end);
+  }
+
+  addHoldHandlers(el.leftBtn, -1);
+  addHoldHandlers(el.rightBtn, +1);
+
+  el.brakeBtn.addEventListener('click', ()=>{
+    if(!running || paused || gameOver) return;
+    if(brakeCharges>0){
+      brakeCharges -= 1; setBrakes(brakeCharges);
+      brakingUntil = now() + BRAKE_MS;
+      setNotice('Brake!', 'var(--gold)');
+      ensureAudio(); beep(320, 70, 'sine', 0.04);
+      vibrate(25);
     }
+  });
 
-    function deleteItem(id) {
-        items = items.filter(item => item.id !== id);
-        saveItems();
-        renderItems();
-    }
+  el.muteBtn.addEventListener('click', ()=>{
+    muted = !muted;
+    el.muteBtn.textContent = (muted ? '🔇 Muted' : '🔈 Sound');
+    if(!muted) ensureAudio();
+  });
 
-    function handleDragStart(e, index) {
-        draggedItem = index;
-        e.target.classList.add('dragging');
-    }
+  el.pauseBtn.addEventListener('click', ()=> pauseGame());
+  el.resumeBtn.addEventListener('click', ()=> resumeGame());
+  el.restartBtn.addEventListener('click', ()=>{
+    el.pauseOverlay.classList.remove('show');
+    startGame();
+  });
 
-    function handleDragEnd(e) {
-        e.target.classList.remove('dragging');
-        draggedItem = null;
-        document.querySelectorAll('.drag-over').forEach(el => {
-            el.classList.remove('drag-over');
-        });
-    }
+  // Help / overlays
+  el.helpBtn.addEventListener('click', ()=> el.helpOverlay.classList.add('show'));
+  el.closeHelpBtn.addEventListener('click', ()=> el.helpOverlay.classList.remove('show'));
+  el.howBtn.addEventListener('click', ()=>{
+    el.startOverlay.classList.remove('show');
+    el.helpOverlay.classList.add('show');
+  });
 
-    function handleDragOver(e) {
-        e.preventDefault();
-    }
+  el.startBtn && el.startBtn.addEventListener('click', ()=>{
+    el.startOverlay.classList.remove('show');
+    ensureAudio(); // unlock audio on first user gesture
+    startGame();
+  });
 
-    function handleDragEnter(e, index) {
-        if (draggedItem !== null && draggedItem !== index) {
-            e.currentTarget.classList.add('drag-over');
-        }
-    }
+  el.againBtn.addEventListener('click', ()=>{
+    el.gameOverOverlay.classList.remove('show');
+    startGame();
+  });
 
-    function handleDragLeave(e) {
-        e.currentTarget.classList.remove('drag-over');
-    }
+  el.shareBtn.addEventListener('click', async ()=>{
+    const text = `I scored ${score} on ORBIT SUM (Level ${level})!`;
+    try{
+      if(navigator.share){
+        await navigator.share({ text, title:'ORBIT SUM' });
+      }else{
+        await navigator.clipboard.writeText(text);
+        setNotice('Copied to clipboard!', 'var(--accent2)');
+      }
+    }catch{}
+  });
 
-    function handleDrop(e, dropIndex) {
-        e.preventDefault();
-        e.currentTarget.classList.remove('drag-over');
-        
-        if (draggedItem !== null && draggedItem !== dropIndex) {
-            const newItems = [...items];
-            const [removed] = newItems.splice(draggedItem, 1);
-            newItems.splice(dropIndex, 0, removed);
-            items = newItems;
-            saveItems();
-            renderItems();
-        }
-    }
+  // Resize
+  window.addEventListener('resize', layout);
+  window.addEventListener('orientationchange', ()=> { setTimeout(layout, 200); });
 
-    function renderItems() {
-        const itemsList = document.getElementById('itemsList');
-        const emptyState = document.getElementById('emptyState');
-        const packedCount = items.filter(item => item.packed).length;
-        const totalCount = items.length;
-        
-        document.getElementById('packedCount').textContent = packedCount;
-        document.getElementById('totalCount').textContent = totalCount;
-        
-        const progressBar = document.getElementById('progressBar');
-        const progressFill = document.getElementById('progressFill');
-        
-        if (totalCount > 0) {
-            progressBar.classList.remove('hidden');
-            const progress = (packedCount / totalCount) * 100;
-            progressFill.style.width = progress + '%';
-            emptyState.classList.add('hidden');
-        } else {
-            progressBar.classList.add('hidden');
-            emptyState.classList.remove('hidden');
-        }
-        
-        itemsList.innerHTML = items.map((item, index) => `
-            <div 
-                draggable="true"
-                data-index="${index}"
-                class="bg-white rounded-xl shadow-md overflow-hidden transition-all cursor-move"
-            >
-                <div class="flex items-center">
-                    <div class="p-4 text-gray-400">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="3" y1="12" x2="21" y2="12"></line>
-                            <line x1="3" y1="6" x2="21" y2="6"></line>
-                            <line x1="3" y1="18" x2="21" y2="18"></line>
-                        </svg>
-                    </div>
-                    <button
-                        onclick="toggleItem(${item.id})"
-                        class="flex-1 flex items-center gap-3 p-4 pl-0 text-left active:bg-gray-50 transition-colors"
-                    >
-                        <div class="w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                            item.packed 
-                                ? 'bg-green-500 border-green-500' 
-                                : 'border-gray-300'
-                        }">
-                            ${item.packed ? `
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
-                                    <polyline points="20 6 9 17 4 12"></polyline>
-                                </svg>
-                            ` : ''}
-                        </div>
-                        <span class="text-base flex-1 transition-all ${
-                            item.packed 
-                                ? 'line-through text-gray-400' 
-                                : 'text-gray-800'
-                        }">
-                            ${item.text}
-                        </span>
-                    </button>
-                    <button
-                        onclick="deleteItem(${item.id})"
-                        class="p-4 text-gray-400 hover:text-red-500 active:bg-gray-50 transition-colors"
-                    >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        `).join('');
+  // Keyboard (optional on desktop)
+  window.addEventListener('keydown', (e)=>{
+    if(e.key==='ArrowLeft') holdStart(-1);
+    if(e.key==='ArrowRight') holdStart(+1);
+    if(e.key===' '){ e.preventDefault(); el.brakeBtn.click(); }
+    if(e.key==='Escape') pauseGame();
+  });
+  window.addEventListener('keyup', (e)=>{
+    if(e.key==='ArrowLeft') holdEnd(-1);
+    if(e.key==='ArrowRight') holdEnd(+1);
+  });
 
-        // Add drag and drop event listeners
-        document.querySelectorAll('[draggable="true"]').forEach((el, index) => {
-            el.addEventListener('dragstart', (e) => handleDragStart(e, index));
-            el.addEventListener('dragend', handleDragEnd);
-            el.addEventListener('dragover', handleDragOver);
-            el.addEventListener('dragenter', (e) => handleDragEnter(e, index));
-            el.addEventListener('dragleave', handleDragLeave);
-            el.addEventListener('drop', (e) => handleDrop(e, index));
-        });
-    }
+  // Initial layout
+  layout();
 
-    function showSaveModal() {
-        document.getElementById('listNameInput').value = currentListName || '';
-        document.getElementById('saveModal').classList.remove('hidden');
-        document.getElementById('listNameInput').focus();
-    }
-
-    function hideSaveModal() {
-        document.getElementById('saveModal').classList.add('hidden');
-    }
-
-    function saveCurrentList() {
-        const listName = document.getElementById('listNameInput').value.trim();
-        if (listName) {
-            currentListName = listName;
-            saveItems();
-            updateListNameDisplay();
-            hideSaveModal();
-            alert('List saved as "' + listName + '"!');
-        }
-    }
-
-    function showLoadModal() {
-        const savedLists = getSavedLists();
-        const container = document.getElementById('savedListsContainer');
-        
-        if (savedLists.length === 0) {
-            container.innerHTML = '<p class="text-gray-400 text-center py-4">No saved lists yet</p>';
-        } else {
-            container.innerHTML = savedLists.map(list => {
-                const date = new Date(list.lastModified).toLocaleDateString();
-                const itemCount = list.items.length;
-                const packedCount = list.items.filter(item => item.packed).length;
-                return `
-                    <div class="flex items-center gap-2">
-                        <button
-                            onclick="loadSavedList('${list.name}')"
-                            class="flex-1 bg-gray-50 hover:bg-gray-100 p-4 rounded-xl text-left active:scale-95 transition-all"
-                        >
-                            <div class="font-medium text-gray-800">${list.name}</div>
-                            <div class="text-sm text-gray-500">${packedCount}/${itemCount} packed • ${date}</div>
-                        </button>
-                        <button
-                            onclick="deleteSavedList('${list.name}')"
-                            class="p-3 text-gray-400 hover:text-red-500 rounded-xl active:bg-gray-100 transition-all"
-                        >
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="3 6 5 6 21 6"></polyline>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            </svg>
-                        </button>
-                    </div>
-                `;
-            }).join('');
-        }
-        
-        document.getElementById('loadModal').classList.remove('hidden');
-    }
-
-    function hideLoadModal() {
-        document.getElementById('loadModal').classList.add('hidden');
-    }
-
-    function loadSavedList(listName) {
-        loadItems(listName);
-        hideLoadModal();
-    }
-
-    function deleteSavedList(listName) {
-        if (confirm('Delete "' + listName + '"?')) {
-            localStorage.removeItem('packingList_' + listName);
-            if (currentListName === listName) {
-                currentListName = null;
-                updateListNameDisplay();
-            }
-            showLoadModal();
-        }
-    }
-
-    function newList() {
-        if (items.length > 0 && !confirm('Start a new list? Current items will be cleared.')) {
-            return;
-        }
-        items = [];
-        currentListName = null;
-        updateListNameDisplay();
-        saveItems();
-        renderItems();
-    }
-
-    // Event listeners
-    document.getElementById('addButton').addEventListener('click', addItem);
-    document.getElementById('itemInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            addItem();
-        }
-    });
-
-    document.getElementById('saveAsButton').addEventListener('click', showSaveModal);
-    document.getElementById('loadListButton').addEventListener('click', showLoadModal);
-    document.getElementById('newListButton').addEventListener('click', newList);
-    document.getElementById('cancelSaveButton').addEventListener('click', hideSaveModal);
-    document.getElementById('confirmSaveButton').addEventListener('click', saveCurrentList);
-    document.getElementById('closeLoadButton').addEventListener('click', hideLoadModal);
-    
-    document.getElementById('listNameInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            saveCurrentList();
-        }
-    });
-
-    // Load on startup
-    loadItems();
+  /* ---------------------------
+     End of IIFE
+  ---------------------------- */
+})();
 </script>
-```
-
 </body>
 </html>
