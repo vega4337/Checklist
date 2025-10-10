@@ -101,8 +101,8 @@
                     color:var(--fg); box-shadow: var(--shadow); }
   #controls button.hold{ font-size:18px; }
   #controls button:active{ transform: translateY(1px) scale(.98); }
-  #brakeBtn{ border-color: rgba(255,216,107,.45); }
-  #brakeBtn strong{ color:var(--gold); }
+  #slowBtn{ border-color: rgba(255,216,107,.45); }
+  #slowBtn strong{ color:var(--gold); }
 
   /* Overlay */
   .overlay{ position: absolute; inset: 0; background: rgba(0,0,0,.55);
@@ -123,13 +123,10 @@
   .shake{ animation: shake .3s ease-in-out; }
   @keyframes shake{ 0%{ transform:translateX(0);} 25%{ transform:translateX(-6px);} 50%{ transform:translateX(4px);} 75%{ transform:translateX(-3px);} 100%{ transform:translateX(0);} }
 
-  /* Tiny badge lines */
   .badge{ display:inline-block; padding:4px 8px; border-radius:999px; background:rgba(68,240,255,.12);
           border:1px solid rgba(68,240,255,.35); color:var(--accent); font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:.4px; }
 
-  /* Prevent text selection while playing */
   .noselect, #controls button, .top-controls button, .tile { user-select:none; -webkit-user-select:none; }
-
 </style>
 </head>
 <body>
@@ -171,7 +168,7 @@
 
   <section id="controls">
     <button id="leftBtn" class="hold" aria-label="Hold to spin left">◀︎ Spin</button>
-    <button id="brakeBtn" aria-label="Slow the ring briefly"><strong>Brake</strong> × <span id="brakes">3</span></button>
+    <button id="slowBtn" class="hold" aria-label="Hold to slow rotation"><strong>Slow</strong></button>
     <button id="rightBtn" class="hold" aria-label="Hold to spin right">Spin ▶︎</button>
   </section>
 
@@ -186,7 +183,7 @@
         <li>Every tile crossing the <strong>top gate</strong> is added to your <strong>SUM</strong>.</li>
         <li>Match the <strong>TARGET</strong> exactly to level up and score.</li>
         <li>Overshoot? You lose a life and SUM resets.</li>
-        <li>Use <strong>Brake</strong> to steady your timing (limited).</li>
+        <li><strong>Hold Slow</strong> to steady your timing (no charges).</li>
       </ul>
       <div class="btnRow">
         <button id="startBtn">▶ Start</button>
@@ -204,9 +201,10 @@
         <li>As tiles pass the <strong>top gate</strong>, their number is added to <strong>SUM</strong>.</li>
         <li>Reach the <strong>TARGET</strong> exactly. You’ll level up, score a bonus, and the ring gets trickier.</li>
         <li><strong>Overshoot</strong> the target and you lose a life. SUM resets to 0.</li>
-        <li>Tap <strong>Brake</strong> to greatly slow rotation for a moment. Charges refill when you hit a target.</li>
+        <li><strong>Hold Slow</strong> to significantly reduce rotation speed while pressed.</li>
+        <li>Every couple of levels: the ring adds more tiles and spins a bit faster.</li>
       </ol>
-      <p class="small">Tip: feather the spin—short holds nudge the ring; longer holds whip it. Watch for patterns to set up clean finishes.</p>
+      <p class="small">Tip: feather the spin—short holds nudge the ring; longer holds whip it. Use <em>Slow</em> near the finish to thread the gate.</p>
       <div class="btnRow">
         <button id="closeHelpBtn">Close</button>
       </div>
@@ -242,22 +240,26 @@
   'use strict';
 
   /* ---------------------------
-     Game configuration
+     Game configuration (easy-start)
+     Tweak these to taste.
   ---------------------------- */
-  const TILE_COUNT = 12;
+  const START_TILES = 6;           // fewer tiles at level 1
+  const MAX_TILES = 14;            // cap to keep things readable
+  const LEVELS_PER_TILE = 2;       // add one tile every 2 levels
+
   const MIN_VAL = 1, MAX_VAL = 9;
   const START_LIVES = 3;
-  const START_BRAKES = 3;
-  const BASE_OMEGA = 28; // deg / sec (auto rotation)
-  const HOLD_OMEGA = 95; // deg / sec (player hold)
-  const BRAKE_FACTOR = 0.12; // slow to 12% speed while braking
-  const BRAKE_MS = 650; // brake duration
-  const TARGET_MIN = 12, TARGET_MAX = 27; // starting target range
-  const GATE_HALF_DEG_START = 8.0; // +/- degrees from top line
-  const GATE_HALF_DEG_MIN = 3.5;   // minimum as difficulty grows
-  const DIFFICULTY_PER_LEVEL = 1.06; // omega multiplier per level
+
+  const BASE_OMEGA_START = 18;     // deg/sec (auto rotation at level 1) — slower start
+  const HOLD_OMEGA = 95;           // deg/sec added while holding spin
+  const DIFFICULTY_PER_LEVEL = 1.09; // base auto speed growth per level (was 1.06)
+
+  const SLOW_FACTOR = 0.38;        // multiply speed while Slow is held (e.g., 38% of normal)
+
+  const TARGET_MIN_START = 8, TARGET_MAX_START = 18; // slightly smaller targets at low levels
+  const GATE_HALF_DEG_START = 10.5; // wider gate at start (total ~21°)
+  const GATE_HALF_DEG_MIN = 3.5;    // minimum as difficulty grows
   const GATE_SHRINK_PER_LEVEL = 0.35; // degrees per level
-  const VALUE_WEIGHTS = [0,1,1,1,1,1,1,1,1,1]; // simple uniform 1..9
 
   /* ---------------------------
      DOM references
@@ -275,8 +277,7 @@
     notice: document.getElementById('notice'),
     leftBtn: document.getElementById('leftBtn'),
     rightBtn: document.getElementById('rightBtn'),
-    brakeBtn: document.getElementById('brakeBtn'),
-    brakes: document.getElementById('brakes'),
+    slowBtn: document.getElementById('slowBtn'),
     muteBtn: document.getElementById('muteBtn'),
     pauseBtn: document.getElementById('pauseBtn'),
     helpBtn: document.getElementById('helpBtn'),
@@ -298,19 +299,18 @@
   /* ---------------------------
      State
   ---------------------------- */
+  let tileCount = START_TILES;
   let tiles = []; // {el, baseDeg, wasInGate, val}
   let w = 0, h = 0, cx = 0, cy = 0, radius = 0;
-  let theta = 0;             // ring rotation in degrees
-  let omegaBase = BASE_OMEGA;// auto angular speed
-  let holdLeft = false, holdRight = false;
-  let brakingUntil = 0;
+  let theta = 0;                // ring rotation in degrees
+  let omegaBase = BASE_OMEGA_START; // auto angular speed
+  let holdLeft = false, holdRight = false, holdSlow = false;
   let lastTime = performance.now();
   let running = false, paused = false, gameOver = false;
   let level = 1, score = 0, high = +localStorage.getItem('orbitsum_high')||0;
   let lives = START_LIVES;
   let target = 0, sum = 0;
   let gateHalfDeg = GATE_HALF_DEG_START;
-  let brakeCharges = START_BRAKES;
   let muted = false;
   let audioCtx = null;
 
@@ -324,14 +324,9 @@
   const now     = ()=> performance.now();
   const normDeg = (d)=> { d = d%360; if(d>180) d-=360; if(d<=-180) d+=360; return d; };
 
-  function chooseValue(){
-    // simple uniform 1..9, easy to tweak with weights
-    return randInt(MIN_VAL, MAX_VAL);
-  }
+  function chooseValue(){ return randInt(MIN_VAL, MAX_VAL); }
 
-  function vibrate(pattern){
-    try{ if(!muted && navigator.vibrate) navigator.vibrate(pattern); }catch{}
-  }
+  function vibrate(pattern){ try{ if(!muted && navigator.vibrate) navigator.vibrate(pattern); }catch{} }
 
   function ensureAudio(){
     if(muted) return;
@@ -368,12 +363,7 @@
     el.lives.style.color = n<=1 ? 'var(--danger)' : 'inherit';
   }
 
-  function setBrakes(n){
-    el.brakes.textContent = String(n);
-  }
-
-  function newTarget(baseMin = TARGET_MIN, baseMax = TARGET_MAX){
-    // scale a bit with level
+  function newTarget(baseMin = TARGET_MIN_START, baseMax = TARGET_MAX_START){
     const L = clamp(level, 1, 50);
     const min = baseMin + Math.floor(L*0.2);
     const max = baseMax + Math.floor(L*0.4);
@@ -396,10 +386,10 @@
   function createTiles(){
     tiles = [];
     el.ring.querySelectorAll('.tile').forEach(n=>n.remove());
-    for(let i=0;i<TILE_COUNT;i++){
+    for(let i=0;i<tileCount;i++){
       const t = document.createElement('div');
       t.className = 'tile';
-      const baseDeg = i*(360/TILE_COUNT);
+      const baseDeg = i*(360/tileCount);
       const val = chooseValue();
       t.textContent = val;
       el.ring.appendChild(t);
@@ -409,7 +399,6 @@
   }
 
   function positionTiles(){
-    // place each tile at angle = baseDeg + theta
     for(const t of tiles){
       const deg = (t.baseDeg + theta) % 360;
       const rad = deg * Math.PI/180;
@@ -433,19 +422,18 @@
     let omega = omegaBase;
     if(holdLeft)  omega -= HOLD_OMEGA;
     if(holdRight) omega += HOLD_OMEGA;
+
+    // Slow while holding the center button
+    if(holdSlow) omega *= SLOW_FACTOR;
+
     omega = clamp(omega, -240, 240);
-
-    // Brake
-    if(t < brakingUntil) omega *= BRAKE_FACTOR;
-
     theta = (theta + omega * dt) % 360;
 
     // Gate detection + render
     let justCollected = false;
     for(const tile of tiles){
       const deg = (tile.baseDeg + theta) % 360;
-      // in our coordinate system, gate is at 0 deg (top)
-      const d = Math.abs(normDeg(deg));
+      const d = Math.abs(normDeg(deg));  // gate is at 0°
       if(d <= gateHalfDeg){
         if(!tile.wasInGate){
           collect(tile);
@@ -459,7 +447,6 @@
 
     positionTiles();
 
-    // Subtle blip when something crosses gate
     if(justCollected){
       el.board.classList.remove('flash');
       void el.board.offsetWidth;
@@ -479,7 +466,7 @@
     sum += tile.val;
     el.sum.textContent = String(sum);
 
-    // Re-roll the tile value immediately (stays at the same place)
+    // Re-roll the tile value immediately (stays at same place)
     tile.val = chooseValue();
     tile.el.textContent = tile.val;
 
@@ -494,13 +481,17 @@
   function onHitTarget(){
     score += 100 + Math.floor(level*35);
     level += 1;
-    // difficulty rise
-    omegaBase = BASE_OMEGA * Math.pow(DIFFICULTY_PER_LEVEL, level-1);
+
+    // Difficulty rise
+    omegaBase = BASE_OMEGA_START * Math.pow(DIFFICULTY_PER_LEVEL, level-1);
     gateHalfDeg = Math.max(GATE_HALF_DEG_MIN, GATE_HALF_DEG_START - (level-1)*GATE_SHRINK_PER_LEVEL);
 
-    // rewards
-    brakeCharges = Math.min(5, brakeCharges + 1);
-    setBrakes(brakeCharges);
+    // Add tiles gradually
+    const desiredTiles = Math.min(MAX_TILES, START_TILES + Math.floor((level-1)/LEVELS_PER_TILE));
+    if(desiredTiles !== tileCount){
+      tileCount = desiredTiles;
+      createTiles(); // rebuild ring with more tiles
+    }
 
     // reset sum & new target
     sum = 0;
@@ -524,10 +515,7 @@
     setNotice('Bust!', 'var(--danger)');
     ensureAudio(); beep(180, 120, 'sawtooth', 0.05);
     vibrate([60,40,60]);
-
-    if(lives <= 0){
-      endGame();
-    }
+    if(lives <= 0){ endGame(); }
   }
 
   function updateUI(){
@@ -546,11 +534,10 @@
   function startGame(){
     running = true; paused = false; gameOver = false;
     level = 1; score = 0; lives = START_LIVES; sum = 0;
-    omegaBase = BASE_OMEGA;
+    tileCount = START_TILES;
+    omegaBase = BASE_OMEGA_START;
     gateHalfDeg = GATE_HALF_DEG_START;
-    brakeCharges = START_BRAKES;
     setHearts(lives);
-    setBrakes(brakeCharges);
     el.sum.textContent = '0'; el.notice.textContent = '';
     newTarget();
     createTiles();
@@ -590,27 +577,25 @@
   }
 
   function addHoldHandlers(btn, dir){
-    // Pointer events cover mouse + touch on modern Safari
     btn.addEventListener('pointerdown', ()=>holdStart(dir));
     const end = ()=>holdEnd(dir);
     btn.addEventListener('pointerup', end);
     btn.addEventListener('pointercancel', end);
     btn.addEventListener('pointerleave', end);
   }
-
   addHoldHandlers(el.leftBtn, -1);
   addHoldHandlers(el.rightBtn, +1);
 
-  el.brakeBtn.addEventListener('click', ()=>{
-    if(!running || paused || gameOver) return;
-    if(brakeCharges>0){
-      brakeCharges -= 1; setBrakes(brakeCharges);
-      brakingUntil = now() + BRAKE_MS;
-      setNotice('Brake!', 'var(--gold)');
-      ensureAudio(); beep(320, 70, 'sine', 0.04);
-      vibrate(25);
-    }
+  // Slow: hold to reduce speed
+  el.slowBtn.addEventListener('pointerdown', ()=>{
+    holdSlow = true;
+    setNotice('Slow', 'var(--gold)');
+    vibrate(16);
   });
+  const endSlow = ()=>{ holdSlow = false; el.notice.textContent = ''; };
+  el.slowBtn.addEventListener('pointerup', endSlow);
+  el.slowBtn.addEventListener('pointercancel', endSlow);
+  el.slowBtn.addEventListener('pointerleave', endSlow);
 
   el.muteBtn.addEventListener('click', ()=>{
     muted = !muted;
@@ -664,12 +649,13 @@
   window.addEventListener('keydown', (e)=>{
     if(e.key==='ArrowLeft') holdStart(-1);
     if(e.key==='ArrowRight') holdStart(+1);
-    if(e.key===' '){ e.preventDefault(); el.brakeBtn.click(); }
+    if(e.key.toLowerCase()==='s'){ holdSlow = true; setNotice('Slow', 'var(--gold)'); }
     if(e.key==='Escape') pauseGame();
   });
   window.addEventListener('keyup', (e)=>{
     if(e.key==='ArrowLeft') holdEnd(-1);
     if(e.key==='ArrowRight') holdEnd(+1);
+    if(e.key.toLowerCase()==='s'){ holdSlow = false; el.notice.textContent = ''; }
   });
 
   // Initial layout
